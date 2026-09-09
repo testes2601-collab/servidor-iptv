@@ -25,48 +25,54 @@ def capturar_stream():
             def on_request(request):
                 nonlocal m3u8_detectado, referer_detectado
                 url = request.url
+                url_lower = url.lower()
                 
-                # Bloqueia estritamente mediacdn, anúncios e rastreadores
-                dominios_bloqueados = ["mediacdn.net", "analytics", "doubleclick", "google", "facebook", "whos.amung.us"]
-                if any(bad in url for bad in dominios_bloqueados):
+                # Bloqueio de domínios indesejados e rastreadores
+                dominios_bloqueados = ["mediacdn.net", "analytics", "doubleclick", "google", "facebook", "whos.amung.us", "faz-o-eli"]
+                if any(bad in url_lower for bad in dominios_bloqueados):
                     return
 
-                # REGRA RÍGIDA: Exige file.txt ou extensão .txt
-                url_sem_parametros = url.split("?")
-                if ("file.txt" in url or url_sem_parametros.endswith(".txt")) and not m3u8_detectado:
+                # Pega apenas a URL antes dos parâmetros '?' como string
+                url_limpa = url_lower.split("?")
+
+                # Filtro rígido para capturar apenas arquivos .txt legítimos da CDN
+                if ("file.txt" in url_limpa or url_limpa.endswith(".txt") or "cloudfront" in url_limpa) and not m3u8_detectado:
                     m3u8_detectado = url
                     headers = request.headers
                     if "referer" in headers:
                         referer_detectado = headers["referer"]
-                    print(f"🎯 Link .txt real capturado: {url}")
+                    print(f"🎯 Link .txt legítimo capturado: {url}")
 
             page.on("request", on_request)
 
             print(f"🔄 Acessando {URL_ALVO}...")
             page.goto(URL_ALVO, wait_until="domcontentloaded", timeout=45000)
-            time.sleep(4)
+            time.sleep(5)
 
-            # Clica no player para acionar o carregamento da CDN
-            try:
-                page.mouse.click(640, 360)
-                time.sleep(2)
-                page.mouse.click(640, 360)
-            except Exception:
-                pass
+            # Força o play no player interno para disparar a requisição HTTP da CDN
+            for frame in page.frames:
+                try:
+                    frame.evaluate("() => { const v = document.querySelector('video'); if (v) v.play(); }")
+                except Exception:
+                    pass
+                try:
+                    frame.click("body", timeout=1000)
+                except Exception:
+                    pass
 
             time.sleep(8)
             browser.close()
     except Exception as e:
         print(f"⚠️ Aviso na navegação: {e}")
 
-    # Atualiza o arquivo de configuração apenas se encontrar um .txt válido
+    # Salva as alterações no arquivo JSON
     if m3u8_detectado:
         config = {
             "url": m3u8_detectado,
             "referer": referer_detectado,
             "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        print(f"✅ Sucesso! Link .txt salvo: {m3u8_detectado}")
+        print(f"✅ Sucesso! Novo link .txt salvo: {m3u8_detectado}")
         with open("stream_config.json", "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
     else:
