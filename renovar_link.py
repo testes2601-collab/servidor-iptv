@@ -23,22 +23,22 @@ def capturar_stream():
                 nonlocal m3u8_detectado, referer_detectado
                 url = request.url
                 
-                # Ignora domínios de anúncios
-                dominios_ignorar = ["mediacdn.net", "analytics", "doubleclick", "google", "facebook", "favicon"]
+                # Ignora anúncios e contadores externos
+                dominios_ignorar = ["mediacdn.net", "analytics", "doubleclick", "google", "facebook", "favicon", "whos.amung.us"]
                 if any(df in url for df in dominios_ignorar):
                     return
 
-                # Prioridade 1: Arquivos file.txt da CDN CloudFront
-                if ("file.txt" in url or "cloudfront" in url) and not m3u8_detectado:
+                # PRIORIDADE MÁXIMA: Capturar explicitamente o arquivo "file.txt" da CDN
+                if "file.txt" in url or "cloudfront" in url:
                     m3u8_detectado = url
                     headers = request.headers
                     if "referer" in headers:
                         referer_detectado = headers["referer"]
+                    print(f"🎯 [FILE.TXT CAPTURADO]: {url}")
                     return
 
-                # Prioridade 2: Outros manifestos M3U8 válidos
-                padroes_validos = [".m3u8", ".m3u", "/live/", "/secure/"]
-                if any(p in url for p in padroes_validos) and not m3u8_detectado:
+                # PRIORIDADE SECUNDÁRIA: Outros manifestos .m3u8 válidos
+                if not m3u8_detectado and any(p in url for p in [".m3u8", ".m3u", "/live/", "/secure/"]):
                     if not url.endswith(".js") and not url.endswith(".css"):
                         m3u8_detectado = url
                         headers = request.headers
@@ -65,7 +65,7 @@ def capturar_stream():
     except Exception as e:
         print(f"⚠️ Aviso no Playwright: {e}")
 
-    # Preserva configuração anterior caso falhe
+    # Mantém o último link válido se a busca falhar
     config_antiga = {}
     if os.path.exists("stream_config.json"):
         try:
@@ -80,7 +80,7 @@ def capturar_stream():
             "referer": referer_detectado,
             "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        print(f"✅ Sucesso! Link capturado: {m3u8_detectado}")
+        print(f"✅ Sucesso! Link file.txt gerado: {m3u8_detectado}")
     elif config_antiga.get("url"):
         config = config_antiga
         config["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
